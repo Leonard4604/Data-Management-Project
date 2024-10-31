@@ -200,7 +200,6 @@ ORDER BY
 /*11) Number of times a driver start as last and finish as first*/
 
 WITH LastPositionStarts AS (
-    -- Find drivers who started in the last position for each race
      SELECT 
         r.race_id,
         r.driver_id,
@@ -208,7 +207,7 @@ WITH LastPositionStarts AS (
     FROM 
         results r
     WHERE 
-        r.grid = (  -- Select only the driver who started from the last position
+        r.grid = (
             SELECT MAX(r2.grid)
             FROM results r2
             WHERE r2.race_id = r.race_id
