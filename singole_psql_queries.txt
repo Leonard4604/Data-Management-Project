@@ -215,7 +215,6 @@ WITH LastPositionStarts AS (
         )
 )
 
--- Now count how many times the driver who started last finished first
 SELECT 
     d.forename, 
     d.surname,
@@ -233,7 +232,7 @@ JOIN
 WHERE 
     CAST(r.position AS INT) = 1
 	OR CAST(r.position AS INT) = 2
-	OR CAST(r.position AS INT) = 3 -- The driver finished first
+	OR CAST(r.position AS INT) = 3
 GROUP BY 
     d.forename, d.surname, r.position
 ORDER BY 
