@@ -1,0 +1,7 @@
+[
+    {
+        "query_number": 3,
+        "description": "Driver trend over time",
+        "query": "MATCH (driver:Driver {name: \"Charles\", surname: \"Leclerc\"})-[:PARTICIPATED_IN]->(r:Result)-[:PART_OF]->(ra:Race) WITH driver, ra.name AS race_name, MIN(toInteger(r.position)) AS best_position WITH driver, race_name, best_position ORDER BY race_name ASC RETURN driver.name, driver.surname, race_name, best_position ORDER BY driver.surname, driver.name, race_name;"
+    }
+]

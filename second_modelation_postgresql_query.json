@@ -1,0 +1,7 @@
+[
+    {
+        "query_number": 3,
+        "description": "Driver trend over time",
+        "query": "SELECT d.forename AS Name, d.surname AS Surname, ra.year, SUM(r.points) AS total_points FROM results r JOIN drivers d ON r.driver_id = d.driver_id JOIN races ra ON r.race_id = ra.race_id WHERE d.forename = 'Charles' AND d.surname = 'Leclerc' GROUP BY ra.year, d.forename, d.surname ORDER BY d.forename, ra.year ASC;"
+    }
+]

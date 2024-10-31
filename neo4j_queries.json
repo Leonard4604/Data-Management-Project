@@ -1,0 +1,57 @@
+[
+    {
+        "query_number": 1,
+        "description": "DRIVERS FOR THE SAME CONSTRUCTOR",
+        "query": "MATCH (d1:Driver)-[:DROVE_FOR]->(c:Constructor)<-[:DROVE_FOR]-(d2:Driver) WHERE d1 <> d2 RETURN d1.name + ' ' + d1.surname AS Driver1, d2.name + ' ' + d2.surname AS Driver2, c.name AS Constructor ORDER BY Constructor, Driver1, Driver2"
+    },
+    {
+        "query_number": 2,
+        "description": "WIN RATIO FOR EACH DRIVER",
+        "query": "MATCH (d:Driver)-[re:PARTICIPATED_IN]->(r:Result) WITH d, COUNT(re) AS total_races, COUNT(CASE WHEN toInteger(r.position) = 1 THEN 1 END) AS wins WHERE total_races > 0 RETURN d.name AS forename, d.surname AS surname, wins, total_races, (wins * 100.0) / total_races AS win_ratio ORDER BY win_ratio DESC;"
+    },
+    {
+        "query_number": 3,
+        "description": "DRIVER TREND OVER TIME",
+        "query": "MATCH (d:Driver {name: 'Max', surname: 'Verstappen'})-[:PARTICIPATED_IN]->(r:Result)-[:PART_OF]->(ra:Race) WITH DISTINCT d, r, ra WITH d.name AS Name, d.surname AS Surname, ra.year AS year, SUM(toInteger(r.points)) AS total_points RETURN Name, Surname, year, total_points ORDER BY Name ASC, year ASC;"
+    },
+    {
+        "query_number": 4,
+        "description": "Average Finishing Position for Drivers",
+        "query": "MATCH (d:Driver)-[:PARTICIPATED_IN]->(r:Result) WITH d.name AS forename, d.surname AS surname, COALESCE(AVG(toInteger(r.position)), 0) AS avg_position RETURN forename, surname, avg_position ORDER BY avg_position DESC;"
+    },
+    {
+        "query_number": 5,
+        "description": "Best position for each driver per race",
+        "query": "MATCH (driver:Driver{name: 'Lewis', surname: 'Hamilton'})-[:PARTICIPATED_IN]->(r:Result)-[:PART_OF]->(ra:Race) WITH driver, ra.name AS race_name, MIN(toInteger(r.position)) AS best_position WITH driver, race_name, best_position ORDER BY race_name ASC RETURN driver.name, driver.surname, race_name, best_position ORDER BY driver.surname, driver.name, race_name;"
+    },
+    {
+        "query_number": 6,
+        "description": "This query calculates the total points for each driver for a particular season.",
+        "query": "MATCH (d:Driver)-[:PARTICIPATED_IN]->(r:Result)-[:PART_OF]->(ra:Race) WHERE ra.year = 2023 OPTIONAL MATCH (d)-[:PARTICIPATED_IN]->(sr:SprintResult)-[:PART_OF]->(ra) WITH d.name AS forename, d.surname AS surname, r.points AS race_points, COALESCE(sr.points, 0) AS sprint_points WITH forename, surname, SUM(toInteger(race_points) + toInteger(sprint_points)) AS total_points RETURN forename, surname, total_points ORDER BY total_points DESC;"
+    },
+    {
+        "query_number": 7,
+        "description": "Similar to driver standings, this query sums up points for each constructor for a season.",
+        "query": "MATCH (c:Constructor)<-[:PART_OF]-(r:Result)-[:PART_OF]->(ra:Race) WHERE ra.year = 2023 OPTIONAL MATCH (sr:SprintResult)-[:PART_OF]->(ra) WHERE r.driver_id = sr.driver_id WITH c.name AS constructor_name, SUM(toInteger(r.points)) AS race_points, COALESCE(SUM(toInteger(sr.points)), 0) AS sprint_points WITH constructor_name, (race_points + sprint_points) AS total_points RETURN constructor_name, total_points ORDER BY total_points DESC;"
+    },
+    {
+        "query_number": 8,
+        "description": "This query identifies the driver with the fastest lap in each race.",
+        "query": "MATCH (race:Race)<-[:PART_OF]-(result:Result) WHERE result.fastestLapTime IS NOT NULL AND result.fastestLapTime <> '\\N' WITH race, result, result.fastestLapTime AS lap_time, toInteger(split(result.fastestLapTime, \":\")[0]) * 60 + toFloat(split(result.fastestLapTime, \":\")[1]) AS lap_time_in_seconds WITH race, MIN(lap_time_in_seconds) AS minLapTime MATCH (driver:Driver)-[:PARTICIPATED_IN]->(result:Result)-[:PART_OF]->(race) WHERE toInteger(split(result.fastestLapTime, \":\")[0]) * 60 + toFloat(split(result.fastestLapTime, \":\")[1]) = minLapTime RETURN race.name AS race_name, driver.name AS forename, driver.surname AS surname, result.fastestLapTime AS fastest_lap_time, race.year AS year ORDER BY race.name ASC, race.year ASC;"
+    },
+    {
+        "query_number": 9,
+        "description": "Constructor Performance by Circuit",
+        "query": "MATCH (result:Result)-[:PART_OF]->(race:Race)-[:HELD_IN]->(circuit:Circuit), (result)-[:PART_OF]->(constructor:Constructor) WITH circuit.name AS circuit_name, constructor.name AS constructor_name, AVG(toFloat(result.position)) AS avg_position WHERE avg_position IS NOT NULL RETURN circuit_name, constructor_name, avg_position ORDER BY circuit_name ASC, avg_position ASC;"
+    },
+    {
+        "query_number": 10,
+        "description": "Finding Mutual Wins Among Drivers",
+        "query": "MATCH (d1:Driver)-[:PARTICIPATED_IN]->(r1:Result)-[:PART_OF]->(ra:Race) MATCH (d2:Driver)-[:PARTICIPATED_IN]->(r2:Result)-[:PART_OF]->(ra) WHERE toInteger(r1.position) = 1 AND toInteger(r2.position) = 2 AND d1 <> d2 WITH d1, d2, COUNT(ra) AS mutual_wins RETURN d1.name AS driver_1_name, d1.surname AS driver_1_surname, d2.name AS driver_2_name, d2.surname AS driver_2_surname, mutual_wins ORDER BY mutual_wins DESC;"
+    },
+    {
+        "query_number": 11,
+        "description": "Number of times a driver starts as last and finishes as first",
+        "query": "MATCH (d:Driver)-[:PARTICIPATED_IN]->(r:Result)-[:PART_OF]->(ra:Race) WITH ra, MAX(toInteger(r.grid)) AS last_position MATCH (d:Driver)-[:PARTICIPATED_IN]->(r:Result)-[:PART_OF]->(ra:Race) WHERE toInteger(r.grid) = last_position AND toInteger(r.position) IN [1, 2, 3] WITH d, ra, r.position AS position, COUNT(ra) AS wins_from_last_position RETURN d.name AS forename, d.surname AS surname, ra.name, position, wins_from_last_position ORDER BY wins_from_last_position ASC;"
+    }
+]

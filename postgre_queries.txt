@@ -1,0 +1,86 @@
+CREATE INDEX idx_results_constructor_driver ON results (constructor_id, driver_id);
+CREATE INDEX idx_constructors_name ON constructors (name);
+
+
+explain analyze SELECT 
+    distinct d1.forename AS driver1,
+    d2.forename AS driver2,
+    c.name AS constructor_name
+FROM 
+    results r1
+JOIN 
+    results r2 ON r1.constructor_id = r2.constructor_id
+    AND r1.driver_id < r2.driver_id
+JOIN 
+    drivers d1 ON r1.driver_id = d1.driver_id
+JOIN 
+    drivers d2 ON r2.driver_id = d2.driver_id
+JOIN
+    constructors c ON r1.constructor_id = c.constructor_id
+where c.name = 'McLaren'
+
+CREATE INDEX idx_results_race_fastest_lap ON results (race_id, fastest_lap_time);
+CREATE INDEX idx_results_driver ON results (driver_id);
+CREATE INDEX idx_races_race_id ON races (race_id);
+
+
+DROP INDEX idx_results_race_fastest_lap
+DROP INDEX idx_results_driver
+DROP INDEX idx_races_race_id
+
+ALTER TABLE races 
+ADD PRIMARY KEY (race_id);
+
+ALTER TABLE results 
+ADD PRIMARY KEY (result_id);
+
+ALTER TABLE drivers 
+ADD PRIMARY KEY (driver_id);
+
+ALTER TABLE circuits 
+ADD PRIMARY KEY (circuit_id);
+
+ALTER TABLE constructor_results 
+ADD PRIMARY KEY (constructor_results_id);
+
+ALTER TABLE constructor_standings 
+ADD PRIMARY KEY (constructor_standings_id);
+
+ALTER TABLE constructors 
+ADD PRIMARY KEY (constructor_id);
+
+ALTER TABLE driver_standings 
+ADD PRIMARY KEY (driver_standings_id);
+
+ALTER TABLE qualifying 
+ADD PRIMARY KEY (qualify_id);
+
+ALTER TABLE sprint_results 
+ADD PRIMARY KEY (result_id);
+
+ALTER TABLE status 
+ADD PRIMARY KEY (status_id);
+
+
+EXPLAIN ANALYZE SELECT 
+    ra.name AS race_name,
+    d.forename, 
+    d.surname,
+    r.fastest_lap_time,
+	ra.year
+FROM 
+    results r
+JOIN 
+    drivers d ON r.driver_id = d.driver_id
+JOIN 
+    races ra ON r.race_id = ra.race_id
+WHERE 
+    r.fastest_lap_time IS NOT NULL
+    AND r.fastest_lap_time = (
+        SELECT MIN(fastest_lap_time)
+        FROM results r2
+        WHERE r2.race_id = r.race_id
+          AND r2.fastest_lap_time IS NOT NULL
+    )
+ORDER BY 
+    ra.name ASC, ra.year ASC, r.fastest_lap_time ASC;

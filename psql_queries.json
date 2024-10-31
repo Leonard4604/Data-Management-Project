@@ -1,0 +1,57 @@
+[
+    {
+        "query_number": 1,
+        "description": "DRIVERS FOR THE SAME CONSTRUCTOR",
+        "query": "EXPLAIN analyze SELECT distinct d1.forename AS driver1, d2.forename AS driver2, c.name AS constructor_name FROM results r1 JOIN results r2 ON r1.constructor_id = r2.constructor_id AND r1.driver_id < r2.driver_id JOIN drivers d1 ON r1.driver_id = d1.driver_id JOIN drivers d2 ON r2.driver_id = d2.driver_id JOIN constructors c ON r1.constructor_id = c.constructor_id WHERE c.name = 'McLaren'"
+    },
+    {
+        "query_number": 2,
+        "description": "WIN RATIO FOR EACH DRIVER",
+        "query": "SELECT d.forename, d.surname, COUNT(CASE WHEN CAST(r.position AS INT) = 1 THEN 1 END) AS wins, COUNT(r.race_id) AS total_races, (COUNT(CASE WHEN CAST(r.position AS INT) = 1 THEN 1 END) * 100.0) / NULLIF(COUNT(r.race_id), 0) AS win_ratio FROM results r JOIN drivers d ON r.driver_id = d.driver_id GROUP BY d.forename, d.surname ORDER BY win_ratio DESC;"
+    },
+    {
+        "query_number": 3,
+        "description": "DRIVER TREND OVER TIME",
+        "query": "SELECT d.forename AS Name, d.surname AS Surname, ra.year, SUM(r.points) AS total_points FROM results r JOIN drivers d ON r.driver_id = d.driver_id JOIN races ra ON r.race_id = ra.race_id WHERE d.forename = 'Max' AND d.surname = 'Verstappen' GROUP BY ra.year, d.forename, d.surname ORDER BY d.forename, ra.year ASC;"
+    },
+    {
+        "query_number": 4,
+        "description": "Average Finishing Position for Drivers",
+        "query": "SELECT d.forename, d.surname, COALESCE(AVG(CAST(r.position AS INTEGER)), 0) AS avg_position FROM results r JOIN drivers d ON r.driver_id = d.driver_id GROUP BY d.forename, d.surname ORDER BY avg_position DESC;"
+    },
+    {
+        "query_number": 5,
+        "description": "Best position for each driver per race",
+        "query": "SELECT d.forename, d.surname, ra.name AS race_name, MIN(r.position) AS best_position FROM results r JOIN drivers d ON r.driver_id = d.driver_id JOIN races ra ON r.race_id = ra.race_id GROUP BY d.forename, d.surname, ra.name ORDER BY d.surname, d.forename, ra.name;"
+    },
+    {
+        "query_number": 6,
+        "description": "Total points for each driver for a particular season.",
+        "query": "SELECT d.forename, d.surname, SUM(r.points) + COALESCE(SUM(sr.points), 0) AS total_points FROM results r JOIN drivers d ON r.driver_id = d.driver_id JOIN races ra ON r.race_id = ra.race_id LEFT JOIN sprint_results sr ON ra.race_id = sr.race_id AND r.driver_id = sr.driver_id WHERE ra.year = 2023 GROUP BY d.forename, d.surname ORDER BY total_points DESC;"
+    },
+    {
+        "query_number": 7,
+        "description": "Points for each constructor for a season.",
+        "query": "SELECT c.name, SUM(r.points) + COALESCE(SUM(sr.points), 0) AS total_points FROM results r JOIN constructors c ON r.constructor_id = c.constructor_id JOIN races ra ON r.race_id = ra.race_id LEFT JOIN sprint_results sr ON ra.race_id = sr.race_id AND r.driver_id = sr.driver_id WHERE ra.year = 2023 GROUP BY c.name ORDER BY total_points DESC;"
+    },
+    {
+        "query_number": 8,
+        "description": "Driver with the fastest lap in each race.",
+        "query": "SELECT ra.name AS race_name, d.forename, d.surname, r.fastest_lap_time, ra.year FROM results r JOIN drivers d ON r.driver_id = d.driver_id JOIN races ra ON r.race_id = ra.race_id WHERE r.fastest_lap_time IS NOT NULL AND r.fastest_lap_time = (SELECT MIN(fastest_lap_time) FROM results r2 WHERE r2.race_id = r.race_id AND r2.fastest_lap_time IS NOT NULL) ORDER BY ra.name ASC, ra.year ASC, r.fastest_lap_time ASC;"
+    },
+    {
+        "query_number": 9,
+        "description": "Constructor Performance by Circuit",
+        "query": "SELECT ci.name AS circuit_name, c.name AS constructor_name, AVG(CAST(r.position AS FLOAT)) AS avg_position FROM results r JOIN constructors c ON r.constructor_id = c.constructor_id JOIN races ra ON r.race_id = ra.race_id JOIN circuits ci ON ra.circuit_id = ci.circuit_id GROUP BY ci.name, c.name HAVING AVG(CAST(r.position AS FLOAT)) IS NOT NULL ORDER BY ci.name ASC, avg_position ASC;"
+    },
+    {
+        "query_number": 10,
+        "description": "Finding Mutual Wins Among Drivers",
+        "query": "SELECT d1.forename AS driver_1_name, d1.surname AS driver_1_surname, d2.forename AS driver_2_name, d2.surname AS driver_2_surname, COUNT(*) AS mutual_wins FROM results r1 JOIN results r2 ON r1.race_id = r2.race_id AND CAST(r1.position AS INT) = 1 AND CAST(r2.position AS INT) = 2 JOIN drivers d1 ON r1.driver_id = d1.driver_id JOIN drivers d2 ON r2.driver_id = d2.driver_id WHERE d1.driver_id <> d2.driver_id GROUP BY d1.driver_id, d2.driver_id, d1.forename, d1.surname, d2.forename, d2.surname ORDER BY mutual_wins DESC;"
+    },
+    {
+        "query_number": 11,
+        "description": "Number of times a driver starts as last and finishes as first",
+        "query": "WITH LastPositionStarts AS ( SELECT r.race_id, r.driver_id, r.grid AS last_position FROM results r WHERE r.grid = ( SELECT MAX(r2.grid) FROM results r2 WHERE r2.race_id = r.race_id )) SELECT d.forename, d.surname, r.position, COUNT(*) AS wins_from_last_position FROM results r JOIN LastPositionStarts lps ON r.race_id = lps.race_id AND r.driver_id = lps.driver_id AND r.grid = lps.last_position JOIN drivers d ON r.driver_id = d.driver_id WHERE CAST(r.position AS INT) = 1 OR CAST(r.position AS INT) = 2 OR CAST(r.position AS INT) = 3 GROUP BY d.forename, d.surname, r.position ORDER BY wins_from_last_position ASC;"
+    }
+]

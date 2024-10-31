@@ -1,0 +1,18 @@
+Neo4j:
+match(n) detach delete(n) -> to remove all the nodes and relationships
+
+MATCH (d:Driver {nationality: "Italian"})-[r:DRIVES_FOR]->(t:Constructor)
+RETURN d, r, t
+
+MATCH (d:Driver {name: "Charles"})-[r:DRIVES_FOR]->(t:Constructor)
+RETURN d.name, d.surname, t.name
+
+Load lap_times in Neo4j desktop:
+CREATE INDEX driver_id_index FOR (d:Driver) ON (d.id);
+CREATE INDEX lap_race_id_lap_number_index FOR (l:Lap) ON (l.race_id, l.lap_number);
+
+LOAD CSV WITH HEADERS FROM 'file:///lap_times.csv' AS row
+MERGE (driver:Driver {id: row.driverId})
+MERGE (lap:Lap {race_id: row.raceId, lap_number: row.lap})
+MERGE (driver)-[:TURNED_IN]->(lap)
+ON CREATE SET lap.time = row.time

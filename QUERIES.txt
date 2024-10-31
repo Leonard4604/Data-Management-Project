@@ -1,0 +1,533 @@
+:auto LOAD CSV WITH HEADERS FROM 'file:///circuits.csv' AS row
+CALL {
+  WITH row
+  CREATE (:Circuit {id: row.circuitId, name: row.name, location: row.location, country: row.country})
+} IN TRANSACTIONS OF 1000 ROWS; 
+
+/*1) DRIVERS FOR THE SAME CONSTRUCTOR*/
+EXPLAIN analyze SELECT 
+    distinct d1.forename AS driver1,
+    d2.forename AS driver2,
+    c.name AS constructor_name
+FROM 
+    results r1
+JOIN 
+    results r2 ON r1.constructorid = r2.constructorid
+    AND r1.driverid < r2.driverid
+JOIN 
+    drivers d1 ON r1.driverid = d1.driverid
+JOIN 
+    drivers d2 ON r2.driverid = d2.driverid
+JOIN
+    constructors c ON r1.constructorid = c.constructorid
+where c.name = 'McLaren'
+
+/*NEO4J CREATE THE RELATION DROVE_FOR*/
+:auto LOAD CSV WITH HEADERS FROM 'file:///results.csv' AS row
+CALL {
+  WITH row
+  MATCH (d:Driver {id: row.driverId})
+  MATCH (c:Constructor {id: row.constructorId})
+  MERGE (d)-[:DROVE_FOR]->(c)
+} IN TRANSACTIONS OF 1000 ROWS
+
+
+/*CREATE RELATION SHARED_CONSTRUCTOR*/
+CALL apoc.periodic.iterate(
+  "MATCH (c:Constructor) RETURN c",
+  "MATCH (d1:Driver)-[:DROVE_FOR]->(c)
+   MATCH (d2:Driver)-[:DROVE_FOR]->(c)
+   WHERE d1.id < d2.id
+   AND NOT EXISTS((d1)-[:SHARED_CONSTRUCTOR]->(d2))
+   MERGE (d1)-[r:SHARED_CONSTRUCTOR]->(d2)
+   SET r.constructor = c.name",
+  {batchSize:10, iterateList:true, parallel:false}
+) 
+
+------------------------------------------------------------------------------------------------------------
+
+/*2) WIN RATIO FOR EACH DRIVER*/
+SELECT 
+    d.forename, d.surname, 
+    COUNT(CASE WHEN CAST(r.position AS INT) = 1 THEN 1 END) AS wins, 
+    COUNT(r.raceid) AS total_races, 
+    (COUNT(CASE WHEN CAST(r.position AS INT) = 1 THEN 1 END) * 100.0) / NULLIF(COUNT(r.raceid), 0) AS win_ratio
+FROM 
+    results r
+JOIN 
+    drivers d ON r.driverid = d.driverid
+GROUP BY 
+    d.forename, d.surname
+ORDER BY 
+    win_ratio DESC;
+
+/*NEO4J*/
+
+:auto LOAD CSV WITH HEADERS FROM 'file:///results.csv' AS row
+CALL {
+  WITH row
+  MATCH (d:Driver {id: row.driverId})
+  MATCH (r:Result {id: row.resultId})
+  MERGE (d)-[:PARTICIPATED_IN]->(r)
+} IN TRANSACTIONS OF 1000 ROWS;
+
+MATCH (d:Driver)-[re:PARTICIPATED_IN]->(r:Result)
+WITH d, 
+     COUNT(re) AS total_races, 
+     COUNT(CASE WHEN toInteger(r.position) = 1 THEN 1 END) AS wins
+WHERE total_races > 0
+RETURN d.name AS forename, 
+       d.surname AS surname, 
+       wins, 
+       total_races, 
+       (wins * 100.0) / total_races AS win_ratio
+ORDER BY win_ratio DESC;
+
+--------------------------------------------------------------------------------------------------------------
+/*LOADERS NEO4J*/
+
+
+:auto LOAD CSV WITH HEADERS FROM 'file:///results.csv' AS row
+CALL {
+  WITH row
+  CREATE (:Result {id: row.resultId, race_id: row.raceId, driver_id: row.driverId, constructor_id: row.constuctorId, number: row.number, position: row.position, points: row.points, laps: row.laps, time: row.time, fastestLapTime: row.fastestLapTime, status_id: row.statusId, grid: row.grid})
+} IN TRANSACTIONS OF 1000 ROWS; 
+
+
+:auto LOAD CSV WITH HEADERS FROM 'file:///races.csv' AS row
+CALL {
+  WITH row
+  CREATE (:Race {id: row.raceId, name: row.name, round: row.round, circuit_id: row.circuitId, date: row.date, time: row.time, year: row.year})
+} IN TRANSACTIONS OF 1000 ROWS; 
+
+:auto LOAD CSV WITH HEADERS FROM 'file:///constructors.csv' AS row
+CALL {
+  WITH row
+  MERGE (c:Constructor {id: row.constructorId, name: row.name, nationality: row.nationality})
+} IN TRANSACTIONS OF 1000 ROWS;
+
+:auto LOAD CSV WITH HEADERS FROM 'file:///drivers.csv' AS row
+CALL {
+  WITH row
+  CREATE (:Driver {id: row.driverId, name: row.forename, surname: row.surname, dob: row.dob, nationality: row.nationality})
+} IN TRANSACTIONS OF 1000 ROWS;
+
+
+------------------------------------------------------------------------------------------------------------------
+
+/*3) DRIVER TREND OVER TIME*/
+
+
+SELECT 
+	d.forename AS Name,
+	d.surname AS Surname,
+    ra.year, 
+    SUM(r.points) AS total_points
+FROM 
+    results r
+JOIN 
+    drivers d ON r.driver_id = d.driver_id
+JOIN 
+    races ra ON r.race_id = ra.race_id
+WHERE d.forename = 'Max' and d.surname = 'Verstappen'
+GROUP BY 
+    ra.year, d.forename, d.surname
+ORDER BY 
+    d.forename, ra.year ASC;
+
+
+
+/*NEO4J*/
+
+MATCH (r:Results), (ra:Race) 
+WHERE r.race_id = ra.id
+MERGE (r)-[:PART_OF]->(ra)
+
+
+MATCH (d:Driver {name: "Max", surname: "Verstappen"})-[:PARTICIPATED_IN]->(r:Results)-[:PART_OF]->(ra:Race)
+WITH DISTINCT d, r, ra
+WITH d.name AS Name, d.surname AS Surname, ra.year AS year, SUM(toInteger(r.points)) AS total_points
+RETURN Name, Surname, year, total_points
+ORDER BY Name ASC, year ASC;
+
+
+/*TO VERIFY IF THERE ARE DUPLICATES*/
+
+MATCH (r:Results{driver_id:"20"})-[:PART_OF]->(ra:Race{id:"1", year:2009})
+WHERE r.race_id = ra.id
+RETURN r, ra;
+
+/*IF THERE ARE ELIMINATE*/
+
+
+MATCH (ra:Race)
+WITH ra.id AS raceId, COLLECT(ra) AS races
+WHERE SIZE(races) > 1
+FOREACH (race IN races[1..] | 
+  DETACH DELETE race
+);
+
+---------------------------------------------------------------------------------------------------------------------------
+
+
+/*4) Average Finishing Position for Drivers*/
+SELECT 
+    d.forename,
+	d.surname,
+    COALESCE(AVG(CAST(r.position AS INTEGER)), 0) AS avg_position
+FROM 
+    results r
+JOIN 
+    drivers d ON r.driver_id = d.driver_id
+GROUP BY 
+    d.forename, d.surname
+ORDER BY 
+    avg_position DESC;
+
+
+/*NEO4J*/
+
+MATCH (d:Driver)-[:PARTICIPATED_IN]->(r:Result)
+WITH d.name AS forename, d.surname AS surname, 
+     COALESCE(AVG(toInteger(r.position)), 0) AS avg_position
+RETURN forename, surname, avg_position
+ORDER BY avg_position DESC;
+
+
+--------------------------------------------------------------------------------------------------------------------
+
+
+/*5) Best position for each driver per race*/
+
+SELECT 
+    d.forename, 
+    d.surname, 
+    ra.name AS race_name,
+    MIN(r.position) AS best_position
+FROM 
+    results r
+JOIN 
+    drivers d ON r.driver_id = d.driver_id
+JOIN 
+    races ra ON r.race_id = ra.race_id
+GROUP BY 
+    d.forename, d.surname, ra.name
+ORDER BY 
+    d.surname, d.forename, ra.name;
+
+
+
+/*NEO4j*/
+
+MATCH (driver:Driver{name: 'Lewis', surname: 'Hamilton'})-[:PARTICIPATED_IN]->(r:Results)-[:PART_OF]->(ra:Race)
+WITH driver, ra.name AS race_name, MIN(toInteger(r.position)) AS best_position
+WITH driver, race_name, best_position
+ORDER BY race_name ASC
+RETURN driver.name, driver.surname, race_name, best_position
+ORDER BY driver.surname, driver.name, race_name;
+
+
+-------------------------------------------------------------------------------------------------------------------------
+/*6) This query calculates the total points for each driver for a particular season.*/
+SELECT 
+    d.forename, 
+    d.surname,
+    SUM(r.points) + COALESCE(SUM(sr.points), 0) AS total_points
+FROM 
+    results r
+JOIN 
+    drivers d ON r.driver_id = d.driver_id
+JOIN 
+    races ra ON r.race_id = ra.race_id
+LEFT JOIN
+    sprint_results sr ON ra.race_id = sr.race_id AND r.driver_id = sr.driver_id
+WHERE 
+    ra.year = 2023
+GROUP BY 
+    d.forename, d.surname
+ORDER BY 
+    total_points DESC;
+
+/*NEO4J*/
+
+
+MATCH (d:Driver)-[:PARTICIPATED_IN]->(r:Results)-[:PART_OF]->(ra:Race)
+WHERE ra.year = 2023
+OPTIONAL MATCH (d)-[:PARTICIPATED_IN]->(sr:SprintResult)-[:PART_OF]->(ra)
+WITH d.name AS forename, d.surname AS surname, r.points AS race_points, COALESCE(sr.points, 0) AS sprint_points
+WITH forename, surname, SUM(toInteger(race_points) + toInteger(sprint_points)) AS total_points
+RETURN forename, surname, total_points
+ORDER BY total_points DESC;
+
+
+/*LOADERS*/
+
+:auto LOAD CSV WITH HEADERS FROM 'file:///sprint_results.csv' AS row
+CALL {
+  WITH row
+  MATCH (d:Driver {id: row.driverId})
+  MATCH (r:SprintResult {id: row.resultId})
+  MERGE (d)-[:PARTICIPATED_IN]->(r)
+} IN TRANSACTIONS OF 1000 ROWS;
+
+
+:auto LOAD CSV WITH HEADERS FROM 'file:///sprint_results.csv' AS row
+CALL {
+  WITH row
+  CREATE (:SprintResult {id: row.resultId, race_id: row.raceId, driver_id: row.driverId, constructor_id: row.constuctorId, number: row.number, position: row.position, points: row.points, laps: row.laps, time: row.time, fastestLapTime: row.fastestLapTime, status_id: row.statusId})
+} IN TRANSACTIONS OF 1000 ROWS; 
+
+
+MATCH (r:SprintResult), (ra:Race) 
+WHERE r.race_id = ra.id
+MERGE (r)-[:PART_OF]->(ra)
+----------------------------------------------------------------------------------------------------------------------------
+
+
+
+/*7) Similar to driver standings, this query sums up points for each constructor for a season.*/
+SELECT 
+    c.name,
+    SUM(r.points) + COALESCE(SUM(sr.points), 0) AS total_points
+FROM 
+    results r
+JOIN 
+    constructors c ON r.constructor_id = c.constructor_id
+JOIN 
+    races ra ON r.race_id = ra.race_id
+LEFT JOIN
+    sprint_results sr ON ra.race_id = sr.race_id AND r.driver_id = sr.driver_id
+WHERE 
+    ra.year = 2023
+GROUP BY 
+    c.name
+ORDER BY 
+    total_points DESC;
+
+
+
+
+/*NEO4J*/
+
+MATCH (c:Constructor)<-[:PART_OF]-(r:Results)-[:PART_OF]->(ra:Race)
+WHERE ra.year = 2023
+OPTIONAL MATCH (sr:SprintResult)-[:PART_OF]->(ra) 
+WHERE r.driver_id = sr.driver_id
+WITH c.name AS constructor_name, SUM(toInteger(r.points)) AS race_points, COALESCE(SUM(toInteger(sr.points)), 0) AS sprint_points
+WITH constructor_name, (race_points + sprint_points) AS total_points
+RETURN constructor_name, total_points
+ORDER BY total_points DESC;
+
+/*LOADERS*/
+
+:auto LOAD CSV WITH HEADERS FROM 'file:///sprint_results.csv' AS row
+CALL {
+  WITH row
+  MATCH (c:Constructor {id: row.constructorId})
+  MATCH (r:SprintResult {id: row.resultId})
+  MERGE (r)-[:PART_OF]->(c)
+} IN TRANSACTIONS OF 1000 ROWS;
+
+
+:auto LOAD CSV WITH HEADERS FROM 'file:///results.csv' AS row
+CALL {
+  WITH row
+  MATCH (c:Constructor {id: row.constructorId})
+  MATCH (r:Results {id: row.resultId})
+  MERGE (r)-[:PART_OF]->(c)
+} IN TRANSACTIONS OF 1000 ROWS;
+
+
+---------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+/*8) This query identifies the driver with the fastest lap in each race.*/
+SELECT 
+    ra.name AS race_name,
+    d.forename, 
+    d.surname,
+    r.fastest_lap_time,
+	ra.year
+FROM 
+    results r
+JOIN 
+    drivers d ON r.driver_id = d.driver_id
+JOIN 
+    races ra ON r.race_id = ra.race_id
+WHERE 
+    r.fastest_lap_time IS NOT NULL
+    AND r.fastest_lap_time = (
+        SELECT MIN(fastest_lap_time)
+        FROM results r2
+        WHERE r2.race_id = r.race_id
+          AND r2.fastest_lap_time IS NOT NULL
+    )
+ORDER BY 
+    ra.name ASC, ra.year ASC, r.fastest_lap_time ASC;
+
+
+
+/*NEO4J*/
+
+MATCH (race:Race)<-[:PART_OF]-(result:Results)
+WHERE result.fastestLapTime IS NOT NULL AND result.fastestLapTime <> '\N'
+WITH race, result, 
+     result.fastestLapTime AS lap_time,
+     toInteger(split(result.fastestLapTime, ":")[0]) * 60 + 
+     toFloat(split(result.fastestLapTime, ":")[1]) AS lap_time_in_seconds
+WITH race, MIN(lap_time_in_seconds) AS minLapTime
+MATCH (driver:Driver)-[:PARTICIPATED_IN]->(result:Results)-[:PART_OF]->(race)
+WHERE toInteger(split(result.fastestLapTime, ":")[0]) * 60 + 
+      toFloat(split(result.fastestLapTime, ":")[1]) = minLapTime
+RETURN race.name AS race_name, driver.name AS forename, driver.surname AS surname, result.fastestLapTime AS fastest_lap_time, race.year AS year
+ORDER BY race.name ASC, race.year ASC;
+
+----------------------------------------------------------------------------------------------------------------------------------------------------
+
+/*9) Constructor Performance by Circuit*/
+SELECT 
+    ci.name AS circuit_name, 
+    c.name AS constructor_name, 
+    AVG(CAST(r.position AS FLOAT)) AS avg_position
+FROM 
+    results r
+JOIN 
+    constructors c ON r.constructor_id = c.constructor_id
+JOIN 
+    races ra ON r.race_id = ra.race_id
+JOIN 
+    circuits ci ON ra.circuit_id = ci.circuit_id
+GROUP BY 
+    ci.name, 
+    c.name
+HAVING 
+    AVG(CAST(r.position AS FLOAT)) IS NOT NULL
+ORDER BY 
+    ci.name ASC, 
+    avg_position ASC;
+
+
+/*NEO4J*/
+
+MATCH (result:Results)-[:PART_OF]->(race:Race)-[:HELD_IN]->(circuit:Circuit),
+      (result)-[:PART_OF]->(constructor:Constructor)
+WITH circuit.name AS circuit_name, constructor.name AS constructor_name, 
+     AVG(toFloat(result.position)) AS avg_position
+WHERE avg_position IS NOT NULL
+RETURN circuit_name, constructor_name, avg_position
+ORDER BY circuit_name ASC, avg_position ASC;
+
+
+:auto LOAD CSV WITH HEADERS FROM 'file:///races.csv' AS row
+CALL {
+  WITH row
+  MATCH (c:Circuit {id: row.circuitId})
+  MATCH (r:Race {id: row.raceId})
+  MERGE (r)-[:HELD_IN]->(c)
+} IN TRANSACTIONS OF 1000 ROWS;
+
+---------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+/*10) Finding Mutual Wins Among Drivers*/
+
+SELECT 
+    d1.forename AS driver_1_name, 
+    d1.surname AS driver_1_surname, 
+	d2.forename AS driver_2_name, 
+    d2.surname AS driver_2_surname, 
+    COUNT(*) AS mutual_wins
+FROM 
+    results r1
+JOIN 
+    results r2 ON r1.race_id = r2.race_id AND CAST(r1.position AS INT) = 1 AND CAST(r2.position AS INT) = 2
+JOIN 
+    drivers d1 ON r1.driver_id = d1.driver_id
+JOIN 
+    drivers d2 ON r2.driver_id = d2.driver_id
+WHERE 
+    d1.driver_id <> d2.driver_id
+GROUP BY 
+    d1.driver_id, d2.driver_id, d1.forename, d1.surname, d2.forename, d2.surname
+ORDER BY
+	mutual_wins DESC;
+
+
+/*NEO4J*/
+
+MATCH (d1:Driver)-[:PARTICIPATED_IN]->(r1:Results)-[:PART_OF]->(ra:Race)
+MATCH (d2:Driver)-[:PARTICIPATED_IN]->(r2:Results)-[:PART_OF]->(ra)
+WHERE toInteger(r1.position) = 1 AND toInteger(r2.position) = 2
+AND d1 <> d2
+WITH d1, d2, COUNT(ra) AS mutual_wins
+// Return results, ordered by mutual wins
+RETURN d1.name AS driver_1_name, 
+       d1.surname AS driver_1_surname, 
+       d2.name AS driver_2_name, 
+       d2.surname AS driver_2_surname, 
+       mutual_wins
+ORDER BY mutual_wins DESC;
+
+
+----------------------------------------------------------------------------------------------------------------------------------------------------
+
+/*11) Number of times a driver start as last and finish as first*/
+
+WITH LastPositionStarts AS (
+     SELECT 
+        r.race_id,
+        r.driver_id,
+        r.grid AS last_position
+    FROM 
+        results r
+    WHERE 
+        r.grid = (
+            SELECT MAX(r2.grid)
+            FROM results r2
+            WHERE r2.race_id = r.race_id
+        )
+)
+
+SELECT 
+    d.forename, 
+    d.surname,
+	r.position,
+    COUNT(*) AS wins_from_last_position
+FROM 
+    results r
+JOIN 
+    LastPositionStarts lps 
+    ON r.race_id = lps.race_id 
+    AND r.driver_id = lps.driver_id 
+    AND r.grid = lps.last_position
+JOIN 
+    drivers d ON r.driver_id = d.driver_id
+WHERE 
+    CAST(r.position AS INT) = 1
+	OR CAST(r.position AS INT) = 2
+	OR CAST(r.position AS INT) = 3
+GROUP BY 
+    d.forename, d.surname, r.position
+ORDER BY 
+    wins_from_last_position ASC;
+
+
+/*NEO4J*/
+MATCH (d:Driver)-[:PARTICIPATED_IN]->(r:Results)-[:PART_OF]->(ra:Race)
+WITH ra, MAX(toInteger(r.grid)) AS last_position
+MATCH (d:Driver)-[:PARTICIPATED_IN]->(r:Results)-[:PART_OF]->(ra:Race)
+WHERE toInteger(r.grid) = last_position
+AND toInteger(r.position) IN [1, 2, 3]
+WITH d, ra, r.position AS position, COUNT(ra) AS wins_from_last_position
+RETURN d.name AS forename, 
+       d.surname AS surname,
+       ra.name, 
+       position, 
+       wins_from_last_position
+ORDER BY wins_from_last_position ASC;
+
+
+
+
+
+

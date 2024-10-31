@@ -1,0 +1,15 @@
+CREATE INDEX IF NOT EXISTS idx_results_race_id ON results (race_id);
+CREATE INDEX IF NOT EXISTS idx_results_driver_id ON results (driver_id);
+CREATE INDEX IF NOT EXISTS idx_results_constructor_id ON results (constructor_id);
+CREATE INDEX IF NOT EXISTS idx_results_position ON results (position);
+CREATE INDEX IF NOT EXISTS idx_results_grid ON results (grid);
+CREATE INDEX IF NOT EXISTS idx_results_fastest_lap_time ON results (fastest_lap_time);
+CREATE INDEX IF NOT EXISTS idx_drivers_driver_id ON drivers (driver_id);
+CREATE INDEX IF NOT EXISTS idx_drivers_forename ON drivers (forename);
+CREATE INDEX IF NOT EXISTS idx_drivers_surname ON drivers (surname);
+CREATE INDEX IF NOT EXISTS idx_constructors_constructor_id ON constructors (constructor_id);
+CREATE INDEX IF NOT EXISTS idx_races_race_id ON races (race_id);
+CREATE INDEX IF NOT EXISTS idx_races_year ON races (year);
+CREATE INDEX IF NOT EXISTS idx_circuits_circuit_id ON circuits (circuit_id);
+CREATE INDEX IF NOT EXISTS idx_sprint_results_race_id ON sprint_results (race_id);
+CREATE INDEX IF NOT EXISTS idx_sprint_results_driver_id ON sprint_results (driver_id);

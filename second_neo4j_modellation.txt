@@ -1,0 +1,61 @@
+:auto LOAD CSV WITH HEADERS FROM 'file:///constructors.csv' AS row
+CALL {
+  WITH row
+  CREATE (:Constructor {id: row.constructorId, name: row.name, nationality: row.nationality})
+} IN TRANSACTIONS OF 1000 ROWS;
+
+:auto LOAD CSV WITH HEADERS FROM 'file:///drivers.csv' AS row
+CALL {
+  WITH row
+  CREATE (:Driver {id: row.driverId, name: row.forename, surname: row.surname, dob: row.dob, nationality: row.nationality})
+} IN TRANSACTIONS OF 1000 ROWS;
+
+:auto LOAD CSV WITH HEADERS FROM 'file:///results.csv' AS row
+CALL {
+  WITH row
+  CREATE (:Result {id: row.resultId, race_id: row.raceId, driver_id: row.driverId, constructor_id: row.constuctorId, number: row.number, position: row.position, points: row.points, laps: row.laps, time: row.time, fastestLapTime: row.fastestLapTime, status_id: row.statusId, grid: row.grid})
+} IN TRANSACTIONS OF 1000 ROWS;
+
+:auto LOAD CSV WITH HEADERS FROM 'file:///results.csv' AS row
+CALL {
+  WITH row
+  MATCH (d:Driver {id: row.driverId})
+  MATCH (c:Constructor {id: row.constructorId})
+  MERGE (c)-[:HAS_DRIVER]->(d)
+} IN TRANSACTIONS OF 1000 ROWS;
+
+:auto LOAD CSV WITH HEADERS FROM 'file:///results.csv' AS row
+CALL {
+  WITH row
+  MATCH (r:Result {id: row.resultId})
+  MATCH (c:Constructor {id: row.constructorId})
+  MERGE (r)-[:PART_OF]->(c)
+} IN TRANSACTIONS OF 1000 ROWS;
+
+:auto LOAD CSV WITH HEADERS FROM 'file:///races.csv' AS row
+CALL {
+  WITH row
+  CREATE (:Race {id: row.raceId, name: row.name, round: row.round, circuit_id: row.circuitId, date: row.date, time: row.time, year: row.year})
+} IN TRANSACTIONS OF 1000 ROWS;
+
+:auto LOAD CSV WITH HEADERS FROM 'file:///sprint_results.csv' AS row
+CALL {
+  WITH row
+  CREATE (:SprintResult {id: row.resultId, race_id: row.raceId, driver_id: row.driverId, constructor_id: row.constuctorId, number: row.number, position: row.position, points: row.points, laps: row.laps, time: row.time, fastestLapTime: row.fastestLapTime, status_id: row.statusId})
+} IN TRANSACTIONS OF 1000 ROWS;
+
+:auto LOAD CSV WITH HEADERS FROM 'file:///sprint_results.csv' AS row
+CALL {
+  WITH row
+  MATCH (d:Driver {id: row.driverId})
+  MATCH (c:Constructor {id: row.constructorId})
+  MERGE (c)-[:HAS_DRIVER]->(d)
+} IN TRANSACTIONS OF 1000 ROWS;
+
+/* 1) Drivers for the same constructor */
+MATCH (c:Constructor)-[:HAS_DRIVER]->(d1:Driver), (c)-[:HAS_DRIVER]->(d2:Driver)
+WHERE d1 <> d2
+RETURN d1.name + ' ' + d1.surname AS Driver1, 
+       d2.name + ' ' + d2.surname AS Driver2, 
+       c.name AS Constructor
+ORDER BY Constructor, Driver1, Driver2;

@@ -1,0 +1,11 @@
+CREATE INDEX IF NOT EXISTS FOR (d:Driver) ON (d.id);
+CREATE INDEX IF NOT EXISTS FOR (c:Constructor) ON (c.id);
+CREATE INDEX IF NOT EXISTS FOR (d:Driver) ON (d.name, d.surname);
+CREATE INDEX IF NOT EXISTS FOR (r:Result) ON (r.race_id);
+CREATE INDEX IF NOT EXISTS FOR (ra:Race) ON (ra.id, ra.year);
+CREATE INDEX IF NOT EXISTS FOR (r:Result) ON (r.id);
+CREATE INDEX IF NOT EXISTS FOR (sr:SprintResult) ON (sr.id);
+CREATE INDEX IF NOT EXISTS FOR (r:Result) ON (r.fastestLapTime);
+CREATE INDEX IF NOT EXISTS FOR (c:Circuit) ON (c.id);
+CREATE INDEX IF NOT EXISTS FOR (constructor:Constructor) ON (constructor.id);
+CREATE INDEX IF NOT EXISTS FOR (r:Result) ON (r.grid, r.position);
